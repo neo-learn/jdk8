@@ -566,7 +566,7 @@ public class HashMap<K,V> extends AbstractMap<K,V>
     final Node<K,V> getNode(int hash, Object key) {
         Node<K,V>[] tab; Node<K,V> first, e; int n; K k;
         if ((tab = table) != null && (n = tab.length) > 0 &&
-            (first = tab[(n - 1) & hash]) != null) {
+            (first = tab[(n - 1) & hash]) != null) {// 使用 n-1 & hash 得到在table里面的位置
             if (first.hash == hash && // always check first node
                 ((k = first.key) == key || (key != null && key.equals(k))))
                 return first;
@@ -574,10 +574,13 @@ public class HashMap<K,V> extends AbstractMap<K,V>
                 if (first instanceof TreeNode)
                     return ((TreeNode<K,V>)first).getTreeNode(hash, key);
                 do {
+                    // 判断目标节点的方法是
+                    // 1. hash 相等且 key 相同
+                    // 2. key equals
                     if (e.hash == hash &&
                         ((k = e.key) == key || (key != null && key.equals(k))))
                         return e;
-                } while ((e = e.next) != null);
+                } while ((e = e.next) != null); // 遍历后续节点，知道找到对应的节点
             }
         }
         return null;
@@ -624,41 +627,41 @@ public class HashMap<K,V> extends AbstractMap<K,V>
     final V putVal(int hash, K key, V value, boolean onlyIfAbsent,
                    boolean evict) {
         Node<K,V>[] tab; Node<K,V> p; int n, i;
-        if ((tab = table) == null || (n = tab.length) == 0)
+        if ((tab = table) == null || (n = tab.length) == 0) // 第一次访问时，resize
             n = (tab = resize()).length;
-        if ((p = tab[i = (n - 1) & hash]) == null)
+        if ((p = tab[i = (n - 1) & hash]) == null) // 在对应的 bucket 里面没有找到指定的元素的话，插入新的元素
             tab[i] = newNode(hash, key, value, null);
-        else {
+        else { // 如果发现给定的 bucket 里面找到了对应的元素
             Node<K,V> e; K k;
             if (p.hash == hash &&
-                ((k = p.key) == key || (key != null && key.equals(k))))
+                ((k = p.key) == key || (key != null && key.equals(k)))) //发现待插入的元素和已经插入的元素的key为同一个，或者equals，则直接返回已经插入的元素即可
                 e = p;
-            else if (p instanceof TreeNode)
+            else if (p instanceof TreeNode) // 发现给定的 hash 对应的节点的类型为 树节点的话，向这个树节点下面插入新的节点
                 e = ((TreeNode<K,V>)p).putTreeVal(this, tab, hash, key, value);
-            else {
+            else { // 在新的链表中插入节点
                 for (int binCount = 0; ; ++binCount) {
-                    if ((e = p.next) == null) {
+                    if ((e = p.next) == null) { // 当前遍历节点的后续节点为空的话，意味着我们找到了尾节点
                         p.next = newNode(hash, key, value, null);
-                        if (binCount >= TREEIFY_THRESHOLD - 1) // -1 for 1st
+                        if (binCount >= TREEIFY_THRESHOLD - 1) // -1 for 1st， 当 bin 的数目大于设定的 树化的阈值时，我们把表结构中对应的hash节点下面的链表树化
                             treeifyBin(tab, hash);
                         break;
                     }
                     if (e.hash == hash &&
-                        ((k = e.key) == key || (key != null && key.equals(k))))
+                        ((k = e.key) == key || (key != null && key.equals(k)))) // 找到了哈希相同，key相同的节点 或者 key 相等的节点，跳出当前循环
                         break;
                     p = e;
                 }
             }
             if (e != null) { // existing mapping for key
                 V oldValue = e.value;
-                if (!onlyIfAbsent || oldValue == null)
+                if (!onlyIfAbsent || oldValue == null) // 如果发现旧的节点的值为null，且允许更新，则更新节点对应的value
                     e.value = value;
                 afterNodeAccess(e);
                 return oldValue;
             }
         }
-        ++modCount;
-        if (++size > threshold)
+        ++modCount; // 记录更改一次
+        if (++size > threshold) // 如果更改后的 size 已经大于了指定的阈值，则重新 resize
             resize();
         afterNodeInsertion(evict);
         return null;
@@ -683,6 +686,8 @@ public class HashMap<K,V> extends AbstractMap<K,V>
                 threshold = Integer.MAX_VALUE;
                 return oldTab;
             }
+            // 默认第一次使用后，旧的 cap 为16，threshold 为 12；当插入的元素大于等于12时，出发resize操作，进入此步判断，我们会将 cap 变为 32，新的 threshold
+            // 变为 24
             else if ((newCap = oldCap << 1) < MAXIMUM_CAPACITY &&
                      oldCap >= DEFAULT_INITIAL_CAPACITY)
                 newThr = oldThr << 1; // double threshold
@@ -690,7 +695,7 @@ public class HashMap<K,V> extends AbstractMap<K,V>
         else if (oldThr > 0) // initial capacity was placed in threshold
             newCap = oldThr;
         else {               // zero initial threshold signifies using defaults
-            newCap = DEFAULT_INITIAL_CAPACITY;
+            newCap = DEFAULT_INITIAL_CAPACITY; // 第一次初始化时，我们使用默认的 capacity 和默认的 threshold
             newThr = (int)(DEFAULT_LOAD_FACTOR * DEFAULT_INITIAL_CAPACITY);
         }
         if (newThr == 0) {
@@ -698,33 +703,34 @@ public class HashMap<K,V> extends AbstractMap<K,V>
             newThr = (newCap < MAXIMUM_CAPACITY && ft < (float)MAXIMUM_CAPACITY ?
                       (int)ft : Integer.MAX_VALUE);
         }
-        threshold = newThr;
+        threshold = newThr; // 更新新的 threshold
         @SuppressWarnings({"rawtypes","unchecked"})
             Node<K,V>[] newTab = (Node<K,V>[])new Node[newCap];
         table = newTab;
-        if (oldTab != null) {
+        if (oldTab != null) { // 将 table 扩容后，需要 rehash 元素
             for (int j = 0; j < oldCap; ++j) {
                 Node<K,V> e;
                 if ((e = oldTab[j]) != null) {
-                    oldTab[j] = null;
-                    if (e.next == null)
+                    oldTab[j] = null; // 释放旧的连接，便于垃圾清理
+                    if (e.next == null) // 如果节点只有一个，即没有链表或者红黑树；直接将旧的节点复制到对应的位置即可
                         newTab[e.hash & (newCap - 1)] = e;
-                    else if (e instanceof TreeNode)
+                    else if (e instanceof TreeNode) // 如果当前遍历的节点为树节点
                         ((TreeNode<K,V>)e).split(this, newTab, j, oldCap);
-                    else { // preserve order
+                    else { // preserve order 如果节点含有链表结构, 将链表一分为2
                         Node<K,V> loHead = null, loTail = null;
                         Node<K,V> hiHead = null, hiTail = null;
                         Node<K,V> next;
                         do {
                             next = e.next;
-                            if ((e.hash & oldCap) == 0) {
+                            // 在这里我们看到了，将 cap 设为 2 的 n 次幂的好处，我们可以很简洁的通过 与运算对链表的数据进行平均分配，确保在 resize 操作后，所有的数据是均衡分配的
+                            if ((e.hash & oldCap) == 0) { // 如果当前遍历的节点的 hash 和旧的 cap 相与为 0（与为0，代表着当前的hash值某一位（ cap 的最高位）为0，也就意味着出现这种数据的可能性为50/50，保证了高端链条数据和低端链表数据平均分配）， 构建低端的链表
                                 if (loTail == null)
                                     loHead = e;
                                 else
                                     loTail.next = e;
                                 loTail = e;
                             }
-                            else {
+                            else { // 其他情况构建高端的链表
                                 if (hiTail == null)
                                     hiHead = e;
                                 else
